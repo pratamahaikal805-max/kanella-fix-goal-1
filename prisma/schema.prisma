@@ -1,0 +1,95 @@
+// Skema database Kedai Order
+// Default pakai SQLite biar langsung jalan tanpa setup server DB.
+// Untuk produksi, ganti provider ke "postgresql" dan isi DATABASE_URL (mis. Supabase/Neon/Railway).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum OrderStatus {
+  MENUNGGU_PEMBAYARAN // dibuat, nunggu customer bayar
+  DIBAYAR             // pembayaran sukses, masuk ke dapur
+  DIPROSES            // dapur lagi masak
+  SIAP_DIANTAR        // makanan siap
+  SELESAI             // sudah diantar / diambil
+  DIBATALKAN          // gagal bayar / dibatalkan
+}
+
+model Table {
+  id        String   @id @default(cuid())
+  code      String   @unique // kode singkat di QR, mis. "A1", "B12"
+  label     String   // nama tampilan, mis. "Meja A1 - Outdoor"
+  isActive  Boolean  @default(true)
+  orders    Order[]
+  createdAt DateTime @default(now())
+}
+
+model Category {
+  id        String     @id @default(cuid())
+  name      String
+  sortOrder Int        @default(0)
+  items     MenuItem[]
+}
+
+model MenuItem {
+  id           String      @id @default(cuid())
+  name         String
+  description  String
+  price        Int         // dalam Rupiah, integer, tanpa desimal
+  imageUrl     String?
+  isAvailable  Boolean     @default(true)
+  isSignature  Boolean     @default(false)
+  category     Category    @relation(fields: [categoryId], references: [id])
+  categoryId   String
+  orderItems   OrderItem[]
+  createdAt    DateTime    @default(now())
+}
+
+model Order {
+  id            String      @id @default(cuid())
+  orderNumber   String      @unique // nomor tiket yang ditampilkan ke customer & dapur
+  table         Table       @relation(fields: [tableId], references: [id])
+  tableId       String
+  customerName  String?
+  notes         String?
+  status        OrderStatus @default(MENUNGGU_PEMBAYARAN)
+  subtotal      Int
+  serviceFee    Int         @default(0)
+  total         Int
+  items         OrderItem[]
+  payment       Payment?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model OrderItem {
+  id         String   @id @default(cuid())
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId    String
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+  menuItemId String
+  nameSnapshot  String  // simpan nama & harga saat order dibuat, biar histori aman walau menu berubah
+  priceSnapshot Int
+  quantity      Int
+  notes         String?
+}
+
+model Payment {
+  id              String   @id @default(cuid())
+  order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId         String   @unique
+  midtransOrderId String   @unique // ID transaksi yang dikirim ke Midtrans
+  snapToken       String?
+  paymentType     String?
+  transactionId   String?
+  grossAmount     Int
+  status          String   @default("pending") // pending | settlement | expire | cancel | deny
+  rawNotification String?  // simpan payload webhook terakhir untuk audit
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
