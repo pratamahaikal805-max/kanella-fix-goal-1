@@ -8,7 +8,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url      = env("postgresql://postgres:[YOUR-PASSWORD]@db.zzbddvciikbpdibkrhzm.supabase.co:5432/postgres")
 }
 
 enum OrderStatus {
